@@ -51,56 +51,46 @@ function injectEnvVars(value: any): any {
 function loadConfigFromFile(): AppConfig {
   const configPath = path.join(__dirname, 'assistants.json');
   
-  // Check if config file exists, otherwise use default
+  // Check if config file exists, otherwise throw error
   let configData: any;
   try {
     const configContent = fs.readFileSync(configPath, 'utf8');
     configData = JSON.parse(configContent);
   } catch (error) {
-    console.warn('assistants.json not found, using default configuration');
-    configData = {
-      appName: 'AI Assistant',
-      defaultAssistant: 'help',
-      globalRateLimit: {
-        maxRequests: 1000,
-        timeWindow: 15 * 60 * 1000
-      },
-      assistants: {
-        help: {
-          id: 'help',
-          name: 'AI Assistant',
-          description: 'Get help with questions',
-          openaiId: '${ASSISTANT_HELP_OPENAI_ID}',
-          subdomain: 'help',
-          rateLimit: {
-            maxRequests: 100,
-            timeWindow: 15 * 60 * 1000
-          }
-        }
-      }
-    };
+    console.error('❌ assistants.json not found or invalid. The application cannot start without it.');
+    throw error;
   }
 
   // Process assistants and inject environment variables
   const assistants: Record<string, AssistantConfig> = {};
   const missingIds: string[] = [];
   
+  // Inject environment variables in assistant openaiIds before checking for missing ones
+  for (const [key, assistant] of Object.entries(configData.assistants)) {
+    const a = assistant as any;
+    a.openaiId = injectEnvVars(a.openaiId);
+  }
+  // Now check for missing openaiId env vars
+  for (const [key, assistant] of Object.entries(configData.assistants)) {
+    const a = assistant as any;
+    if (typeof a.openaiId === 'string' && a.openaiId.includes('${')) {
+      throw new Error(`❌ Environment variable for assistant '${key}' openaiId is missing. Please set it in your environment.`);
+    }
+  }
+  
   for (const [key, assistant] of Object.entries(configData.assistants)) {
     const assistantData = assistant as any;
     
-    // Inject environment variables in the openaiId
-    const openaiId = injectEnvVars(assistantData.openaiId);
-    
     // Check if the openaiId still contains placeholders (env vars not found)
-    if (typeof openaiId === 'string' && openaiId.includes('${')) {
-      const envVar = openaiId.match(/\${([^}]+)}/)?.[1];
+    if (typeof assistantData.openaiId === 'string' && assistantData.openaiId.includes('${')) {
+      const envVar = assistantData.openaiId.match(/\${([^}]+)}/)?.[1];
       if (envVar) {
         missingIds.push(`${assistantData.id} (${envVar})`);
       }
       continue; // Skip this assistant if env var not found
     }
     
-    if (!openaiId) {
+    if (!assistantData.openaiId) {
       missingIds.push(`${assistantData.id} (openaiId not set)`);
       continue;
     }
@@ -109,7 +99,7 @@ function loadConfigFromFile(): AppConfig {
       id: assistantData.id,
       name: assistantData.name,
       description: assistantData.description,
-      assistantId: openaiId,
+      assistantId: assistantData.openaiId,
       rateLimit: assistantData.rateLimit,
       subdomain: assistantData.subdomain || assistantData.id,
     };
@@ -135,19 +125,29 @@ function loadConfigFromFile(): AppConfig {
     }
   }
 
-  // Inject environment variables in app-level config
-  const appName = injectEnvVars(configData.appName);
-  const defaultAssistant = injectEnvVars(configData.defaultAssistant);
+  // Use environment variables for app-level config, fail if missing
+  if (!process.env.APP_NAME) {
+    throw new Error('❌ APP_NAME environment variable is required.');
+  }
+  if (!process.env.DEFAULT_ASSISTANT) {
+    throw new Error('❌ DEFAULT_ASSISTANT environment variable is required.');
+  }
+  if (!configData.assistants || Object.keys(configData.assistants).length === 0) {
+    throw new Error('❌ assistants.json must define at least one assistant.');
+  }
+  const appName = process.env.APP_NAME;
+  const defaultAssistant = process.env.DEFAULT_ASSISTANT;
+  const globalRateLimit = {
+    maxRequests: Number(process.env.GLOBAL_RATE_LIMIT_MAX) || 1000,
+    timeWindow: Number(process.env.GLOBAL_RATE_LIMIT_WINDOW) || 15 * 60 * 1000,
+  };
 
   return {
     assistants,
-    defaultAssistant: process.env.DEFAULT_ASSISTANT || defaultAssistant || Object.keys(assistants)[0] || 'help',
-    globalRateLimit: {
-      maxRequests: Number(process.env.GLOBAL_RATE_LIMIT_MAX) || configData.globalRateLimit?.maxRequests || 1000,
-      timeWindow: Number(process.env.GLOBAL_RATE_LIMIT_WINDOW) || configData.globalRateLimit?.timeWindow || 15 * 60 * 1000,
-    },
+    defaultAssistant,
+    globalRateLimit,
     apiKey: process.env.API_KEY,
-    appName: process.env.APP_NAME || appName || 'AI Assistant',
+    appName,
   };
 }
 

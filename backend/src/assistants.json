@@ -1,10 +1,4 @@
 {
-  "appName": "AI Assistant",
-  "defaultAssistant": "help",
-  "globalRateLimit": {
-    "maxRequests": 1000,
-    "timeWindow": 900000
-  },
   "assistants": {
     "help": {
       "id": "help",

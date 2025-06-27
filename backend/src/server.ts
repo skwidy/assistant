@@ -201,6 +201,16 @@ fastify.get('/info', async (_request: FastifyRequest, _reply: FastifyReply) => {
   };
 });
 
+// Add a global error handler
+fastify.setErrorHandler((error, request, reply) => {
+  fastify.log.error(error);
+  const statusCode = error.statusCode || 500;
+  reply.status(statusCode).send({
+    error: 'Internal server error',
+    message: error.message || 'An unexpected error occurred.'
+  });
+});
+
 const start = async () => {
   try {
     const port = process.env.PORT ? Number(process.env.PORT) : 3001;
