@@ -25,6 +25,13 @@ fastify.get('/health', async (_request: FastifyRequest, _reply: FastifyReply) =>
   return { status: 'ok', timestamp: new Date().toISOString() };
 });
 
+// Add /info endpoint to return assistant name
+fastify.get('/info', async (_request: FastifyRequest, _reply: FastifyReply) => {
+  return {
+    name: process.env.ASSISTANT_NAME || 'AI Assistant',
+  };
+});
+
 interface AskRequestBody {
   message: string;
   threadId?: string;

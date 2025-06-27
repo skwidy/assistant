@@ -1,6 +1,4 @@
-import { Card, CardContent } from '@/components/ui/card'
 import MarkdownViewer from './MarkdownViewer'
-import { User, Bot } from 'lucide-react'
 
 interface MessageProps {
   message: string
@@ -9,25 +7,25 @@ interface MessageProps {
 
 export default function Message({ message, isUser }: MessageProps) {
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
-      <div className={`flex items-start gap-3 max-w-[80%] ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-        <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-          isUser 
-            ? 'bg-blue-500 text-white' 
-            : 'bg-gray-500 text-white'
-        }`}>
-          {isUser ? <User size={16} /> : <Bot size={16} />}
-        </div>
-        
-        <Card className={`${isUser ? 'bg-blue-500 text-white' : 'bg-gray-50 dark:bg-gray-800'}`}>
-          <CardContent className="p-4">
-            {isUser ? (
-              <p className="text-sm">{message}</p>
-            ) : (
+    <div className="py-1">
+      <div className="max-w-3xl mx-auto px-4">
+        <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+          {isUser ? (
+            <div
+              className="rounded-2xl px-4 py-1 text-base bg-gray-700 text-white mb-8"
+              style={{ maxWidth: '95%' }}
+            >
+              {message}
+            </div>
+          ) : (
+            <div
+              className="text-base text-gray-900 dark:text-gray-100 leading-relaxed"
+              style={{ maxWidth: '100%' }}
+            >
               <MarkdownViewer content={message} />
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
