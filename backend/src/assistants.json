@@ -1,0 +1,21 @@
+{
+  "appName": "AI Assistant",
+  "defaultAssistant": "help",
+  "globalRateLimit": {
+    "maxRequests": 1000,
+    "timeWindow": 900000
+  },
+  "assistants": {
+    "help": {
+      "id": "help",
+      "name": "API Assistant",
+      "description": "I'm here to assist you with any questions you might have regarding our API.",
+      "openaiId": "${ASSISTANT_HELP_OPENAPI_ID}",
+      "subdomain": "help",
+      "rateLimit": {
+        "maxRequests": 100,
+        "timeWindow": 900000
+      }
+    }
+  }
+} 

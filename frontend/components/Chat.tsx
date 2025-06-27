@@ -14,6 +14,20 @@ interface Message {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
 
+// Get assistant ID from query param or subdomain
+function getAssistantId(): string {
+  if (typeof window === 'undefined') return 'help'
+  const url = new URL(window.location.href)
+  const queryId = url.searchParams.get('assistant')
+  if (queryId) return queryId
+
+  const hostname = window.location.hostname
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'help' // default for local dev
+  }
+  return hostname.split('.')[0]
+}
+
 const SUGGESTED_PROMPTS = [
   {
     title: "Explain a concept",
@@ -70,11 +84,14 @@ export default function Chat() {
   const [isClient, setIsClient] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const [assistantName, setAssistantName] = useState('AI Assistant')
+  const [assistantName, setAssistantName] = useState<string | null>(null)
+  const [assistantDescription, setAssistantDescription] = useState<string | null>(null)
+  const [assistantId, setAssistantId] = useState<string>('help')
 
   // Check if we're on the client side
   useEffect(() => {
     setIsClient(true)
+    setAssistantId(getAssistantId())
   }, [])
 
   // Load threadId and messages from localStorage on component mount (client-side only)
@@ -83,8 +100,10 @@ export default function Chat() {
 
     console.log('Loading from localStorage...')
     
-    const savedThreadId = storage.get('cd_assistant_thread_id')
-    const savedMessages = storage.get('cd_assistant_messages')
+    // Use assistant-specific storage keys
+    const storageKey = `cd_assistant_${assistantId}`
+    const savedThreadId = storage.get(`${storageKey}_thread_id`)
+    const savedMessages = storage.get(`${storageKey}_messages`)
     const savedDarkMode = storage.get('cd_assistant_dark_mode')
     
     console.log('Saved data:', { savedThreadId, savedMessages, savedDarkMode })
@@ -101,14 +120,15 @@ export default function Chat() {
     if (savedDarkMode !== null) {
       setIsDarkMode(savedDarkMode)
     }
-  }, [isClient])
+  }, [isClient, assistantId])
 
   // Save messages to localStorage whenever they change (client-side only)
   useEffect(() => {
     if (!isClient) return
     console.log('Saving messages to localStorage:', messages.length)
-    storage.set('cd_assistant_messages', messages)
-  }, [messages, isClient])
+    const storageKey = `cd_assistant_${assistantId}`
+    storage.set(`${storageKey}_messages`, messages)
+  }, [messages, isClient, assistantId])
 
   // Save dark mode preference to localStorage (client-side only)
   useEffect(() => {
@@ -134,15 +154,30 @@ export default function Chat() {
     }
   }, [input])
 
-  // Fetch assistant name on mount
+  // Fetch assistant info on mount
   useEffect(() => {
-    fetch(`${API_URL}/info`)
+    const id = getAssistantId()
+    fetch(`${API_URL}/assistants/${id}/info`)
       .then(res => res.json())
       .then(data => {
-        if (data && data.name) setAssistantName(data.name)
+        if (data && data.name) {
+          setAssistantName(data.name)
+          document.title = data.name
+        } else {
+          setAssistantName(null)
+        }
+        if (data && data.description) {
+          setAssistantDescription(data.description)
+        } else {
+          setAssistantDescription(null)
+        }
       })
-      .catch(() => setAssistantName('AI Assistant'));
-  }, []);
+      .catch(() => {
+        setAssistantName(null)
+        setAssistantDescription(null)
+        document.title = 'AI Assistant'
+      });
+  }, [assistantId]);
 
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode)
@@ -159,7 +194,8 @@ export default function Chat() {
     setMessages(prev => [...prev, { content, isUser: true }])
 
     try {
-      const response = await fetch(`${API_URL}/ask`, {
+      const id = getAssistantId()
+      const response = await fetch(`${API_URL}/assistants/${id}/ask`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -180,7 +216,8 @@ export default function Chat() {
       if (data.threadId && data.threadId !== threadId) {
         setThreadId(data.threadId)
         if (isClient) {
-          storage.set('cd_assistant_thread_id', data.threadId)
+          const storageKey = `cd_assistant_${assistantId}`
+          storage.set(`${storageKey}_thread_id`, data.threadId)
         }
       }
 
@@ -202,8 +239,9 @@ export default function Chat() {
     setMessages([])
     setThreadId(null)
     if (isClient) {
-      storage.remove('cd_assistant_thread_id')
-      storage.remove('cd_assistant_messages')
+      const storageKey = `cd_assistant_${assistantId}`
+      storage.remove(`${storageKey}_thread_id`)
+      storage.remove(`${storageKey}_messages`)
     }
   }
 
@@ -217,6 +255,16 @@ export default function Chat() {
 
   const handleSuggestedPrompt = (prompt: string) => {
     sendMessage(prompt)
+  }
+
+  // Show error if assistant info is missing
+  if (assistantName === null) {
+    return (
+      <div className="flex flex-col h-screen items-center justify-center">
+        <h1 className="text-2xl font-bold text-red-600">Assistant configuration error</h1>
+        <p className="text-gray-500 mt-2">Could not load assistant info. Please check your backend and environment variables.</p>
+      </div>
+    )
   }
 
   // Show init phase when no messages
@@ -247,7 +295,7 @@ export default function Chat() {
                 How can I help you today?
               </h3>
               <p className="text-gray-600 dark:text-gray-400 text-lg leading-relaxed">
-                I'm here to assist you with any questions or tasks you might have.
+                {assistantDescription}
               </p>
             </div>
 
@@ -262,7 +310,7 @@ export default function Chat() {
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Message AI Assistant..."
+                  placeholder={`Message ${assistantName}...`}
                   rows={1}
                   className="flex-1 resize-none bg-transparent outline-none border-0 text-base py-2 px-0 focus:ring-0 focus:outline-none placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
                   style={{ minHeight: '40px', maxHeight: '120px', overflow: 'auto' }}
@@ -345,7 +393,7 @@ export default function Chat() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Message AI Assistant..."
+              placeholder={`Message ${assistantName}...`}
               rows={1}
               className="flex-1 resize-none bg-transparent outline-none border-0 text-base py-2 px-0 focus:ring-0 focus:outline-none placeholder-gray-400 dark:placeholder-gray-500 transition-colors"
               style={{ minHeight: '40px', maxHeight: '120px', overflow: 'auto' }}
