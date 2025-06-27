@@ -87,6 +87,8 @@ export default function Chat() {
   const [assistantName, setAssistantName] = useState<string | null>(null)
   const [assistantDescription, setAssistantDescription] = useState<string | null>(null)
   const [assistantId, setAssistantId] = useState<string>('help')
+  const [loadingAssistantInfo, setLoadingAssistantInfo] = useState(true)
+  const [assistantInfoError, setAssistantInfoError] = useState(false)
 
   // Check if we're on the client side
   useEffect(() => {
@@ -156,6 +158,8 @@ export default function Chat() {
 
   // Fetch assistant info on mount
   useEffect(() => {
+    setLoadingAssistantInfo(true)
+    setAssistantInfoError(false)
     const id = getAssistantId()
     fetch(`${API_URL}/assistants/${id}/info`)
       .then(res => res.json())
@@ -163,21 +167,22 @@ export default function Chat() {
         if (data && data.name) {
           setAssistantName(data.name)
           document.title = data.name
+          setAssistantDescription(data.description)
+          setAssistantInfoError(false)
         } else {
           setAssistantName(null)
-        }
-        if (data && data.description) {
-          setAssistantDescription(data.description)
-        } else {
           setAssistantDescription(null)
+          setAssistantInfoError(true)
         }
       })
       .catch(() => {
         setAssistantName(null)
         setAssistantDescription(null)
+        setAssistantInfoError(true)
         document.title = 'AI Assistant'
-      });
-  }, [assistantId]);
+      })
+      .finally(() => setLoadingAssistantInfo(false))
+  }, [assistantId])
 
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode)
@@ -257,8 +262,46 @@ export default function Chat() {
     sendMessage(prompt)
   }
 
-  // Show error if assistant info is missing
-  if (assistantName === null) {
+  // Loading skeleton for chat UI
+  function ChatLoadingSkeleton() {
+    return (
+      <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="flex items-center justify-between p-4">
+          <div className="h-6 w-32 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+          </div>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center px-4 py-8">
+          <div className="w-full max-w-2xl space-y-6">
+            {[1, 2].map(i => (
+              <div key={i} className="flex gap-3 items-start">
+                <div className="w-8 h-8 rounded-full bg-gray-300 dark:bg-gray-700 animate-pulse" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-3/4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                  <div className="h-4 w-1/2 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="w-full max-w-xl mt-8">
+            <div className="flex items-end gap-2 bg-white dark:bg-[#343541] rounded-2xl px-4 py-3 shadow-sm">
+              <div className="flex-1 h-10 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+              <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (loadingAssistantInfo) {
+    return (
+      <ChatLoadingSkeleton />
+    )
+  }
+
+  if (assistantInfoError) {
     return (
       <div className="flex flex-col h-screen items-center justify-center">
         <h1 className="text-2xl font-bold text-red-600">Assistant configuration error</h1>
