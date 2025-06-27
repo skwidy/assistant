@@ -1,0 +1,27 @@
+{
+  "name": "assistant-backend",
+  "version": "1.0.0",
+  "description": "Fastify backend for Assistant",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "ts-node src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "ts-node test.ts"
+  },
+  "dependencies": {
+    "fastify": "^4.24.3",
+    "@fastify/cors": "^8.4.0",
+    "openai": "^4.20.1",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "node-fetch": "^2.7.0",
+    "typescript": "^5.4.0",
+    "@types/node": "^20.11.0",
+    "ts-node": "^10.9.2"
+  },
+  "keywords": ["fastify", "openai", "assistants-api", "chat"],
+  "author": "Guillaume Odier",
+  "license": "MIT"
+} 
