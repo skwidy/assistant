@@ -14,18 +14,28 @@ interface Message {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
 
-// Get assistant ID from query param or subdomain
-function getAssistantId(): string {
-  if (typeof window === 'undefined') return 'help'
+// Get assistant ID from query param or subdomain, or fallback to backend default
+async function getAssistantIdWithDefault(): Promise<string | null> {
+  if (typeof window === 'undefined') return null
   const url = new URL(window.location.href)
   const queryId = url.searchParams.get('assistant')
   if (queryId) return queryId
 
   const hostname = window.location.hostname
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'help' // default for local dev
+
+
+  // Fallback: fetch default assistant from backend
+  try {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+    const res = await fetch(`${apiUrl}/assistants`)
+    const data = await res.json()
+    if (data && data.defaultAssistant) {
+      return data.defaultAssistant
+    }
+  } catch (e) {
+    // If fetch fails, return null
   }
-  return hostname.split('.')[0]
+  return null
 }
 
 const SUGGESTED_PROMPTS = [
@@ -86,14 +96,22 @@ export default function Chat() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [assistantName, setAssistantName] = useState<string | null>(null)
   const [assistantDescription, setAssistantDescription] = useState<string | null>(null)
-  const [assistantId, setAssistantId] = useState<string>('help')
+  const [assistantId, setAssistantId] = useState<string | null>(null)
   const [loadingAssistantInfo, setLoadingAssistantInfo] = useState(true)
   const [assistantInfoError, setAssistantInfoError] = useState(false)
+  const [assistantIdError, setAssistantIdError] = useState<boolean>(false)
 
   // Check if we're on the client side
   useEffect(() => {
     setIsClient(true)
-    setAssistantId(getAssistantId())
+    getAssistantIdWithDefault().then(id => {
+      if (id) {
+        setAssistantId(id)
+        setAssistantIdError(false)
+      } else {
+        setAssistantIdError(true)
+      }
+    })
   }, [])
 
   // Load threadId and messages from localStorage on component mount (client-side only)
@@ -160,28 +178,38 @@ export default function Chat() {
   useEffect(() => {
     setLoadingAssistantInfo(true)
     setAssistantInfoError(false)
-    const id = getAssistantId()
-    fetch(`${API_URL}/assistants/${id}/info`)
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.name) {
-          setAssistantName(data.name)
-          document.title = data.name
-          setAssistantDescription(data.description)
-          setAssistantInfoError(false)
-        } else {
+    async function fetchInfo() {
+      let id = assistantId
+      if (!id) {
+        setAssistantIdError(true)
+        setLoadingAssistantInfo(false)
+        return
+      } else {
+        setAssistantIdError(false)
+      }
+      fetch(`${API_URL}/assistants/${id}/info`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.name) {
+            setAssistantName(data.name)
+            document.title = data.name
+            setAssistantDescription(data.description)
+            setAssistantInfoError(false)
+          } else {
+            setAssistantName(null)
+            setAssistantDescription(null)
+            setAssistantInfoError(true)
+          }
+        })
+        .catch(() => {
           setAssistantName(null)
           setAssistantDescription(null)
           setAssistantInfoError(true)
-        }
-      })
-      .catch(() => {
-        setAssistantName(null)
-        setAssistantDescription(null)
-        setAssistantInfoError(true)
-        document.title = 'AI Assistant'
-      })
-      .finally(() => setLoadingAssistantInfo(false))
+          document.title = 'AI Assistant'
+        })
+        .finally(() => setLoadingAssistantInfo(false))
+    }
+    fetchInfo()
   }, [assistantId])
 
   const toggleDarkMode = () => {
@@ -199,7 +227,11 @@ export default function Chat() {
     setMessages(prev => [...prev, { content, isUser: true }])
 
     try {
-      const id = getAssistantId()
+      let id = assistantId
+      if (!id) {
+        id = await getAssistantIdWithDefault()
+        setAssistantId(id)
+      }
       const response = await fetch(`${API_URL}/assistants/${id}/ask`, {
         method: 'POST',
         headers: {
@@ -306,6 +338,15 @@ export default function Chat() {
       <div className="flex flex-col h-screen items-center justify-center">
         <h1 className="text-2xl font-bold text-red-600">Assistant configuration error</h1>
         <p className="text-gray-500 mt-2">Could not load assistant info. Please check your backend and environment variables.</p>
+      </div>
+    )
+  }
+
+  if (assistantIdError) {
+    return (
+      <div className="flex flex-col h-screen items-center justify-center">
+        <h1 className="text-2xl font-bold text-red-600">Assistant configuration error</h1>
+        <p className="text-gray-500 mt-2">Could not determine the default assistant. Please check your backend and environment variables.</p>
       </div>
     )
   }

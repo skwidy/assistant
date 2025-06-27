@@ -1,11 +1,11 @@
 {
   "assistants": {
-    "help": {
-      "id": "help",
+    "help_api": {
+      "id": "help_api",
       "name": "API Assistant",
       "description": "I'm here to assist you with any questions you might have regarding our API.",
       "openaiId": "${ASSISTANT_HELP_OPENAPI_ID}",
-      "subdomain": "help",
+      "subdomain": "assistant",
       "rateLimit": {
         "maxRequests": 100,
         "timeWindow": 900000
